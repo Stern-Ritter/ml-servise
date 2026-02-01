@@ -1,67 +1,48 @@
-from enums import Currency, TransactionType
-from .base import Entity
+from sqlalchemy import Column, Float, String, ForeignKey, Enum as SQLAlchemyEnum
+from sqlalchemy.orm import relationship, Mapped, mapped_column
+from typing import TYPE_CHECKING
+
+from .base import BaseEntity
+from .enums import Currency, TransactionType
+
+if TYPE_CHECKING:
+    from .user import User
 
 
-class Balance(Entity):
-    def __init__(self, id: int, value: float, currency: Currency, user_id: int):
-        super().__init__(id)
-        self._value = value
-        self._currency = currency
-        self._user_id = user_id
+class Balance(BaseEntity):
+    __tablename__ = "balances"
 
-    @property
-    def value(self) -> float:
-        return self._value
+    value = Column(Float, default=0.0, nullable=False)
+    currency = Column(SQLAlchemyEnum(Currency),
+                      nullable=False, default=Currency.RUB)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"), unique=True, nullable=False)
 
-    @property
-    def currency(self) -> Currency:
-        return self._currency
-
-    @property
-    def user_id(self) -> int:
-        return self._user_id
+    user: Mapped["User"] = relationship("User", back_populates="balance")
 
     def deposit(self, amount: float) -> bool:
         if amount <= 0:
             return False
-        self._value += amount
+        self.value += amount
         self.update_timestamp()
         return True
 
     def withdraw(self, amount: float) -> bool:
-        if amount <= 0 or amount > self._value:
+        if amount <= 0 or amount > self.value:
             return False
-        self._value -= amount
+        self.value -= amount
         self.update_timestamp()
         return True
 
 
-class Transaction(Entity):
-    def __init__(self, id: int, type: TransactionType, amount: float, currency: Currency,
-                 description: str, user_id: int):
-        super().__init__(id)
-        self._type = type
-        self._amount = amount
-        self._currency = currency
-        self._description = description
-        self._user_id = user_id
+class Transaction(BaseEntity):
+    __tablename__ = "transactions"
 
-    @property
-    def type(self) -> TransactionType:
-        return self._type
+    type = Column(SQLAlchemyEnum(TransactionType), nullable=False)
+    amount = Column(Float, nullable=False)
+    currency = Column(SQLAlchemyEnum(Currency), nullable=False)
+    description = Column(String(256))
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"), nullable=False)
 
-    @property
-    def amount(self) -> float:
-        return self._amount
-
-    @property
-    def currency(self) -> Currency:
-        return self._currency
-
-    @property
-    def description(self) -> str:
-        return self._description
-
-    @property
-    def user_id(self) -> int:
-        return self._user_id
+    user: Mapped["User"] = relationship("User", back_populates="transactions")
