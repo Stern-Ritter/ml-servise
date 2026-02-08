@@ -1,77 +1,85 @@
-from typing import Optional
+from sqlalchemy import Column, String, Boolean, ForeignKey, Table, Enum as SQLAlchemyEnum
+from sqlalchemy.orm import relationship, Mapped, mapped_column
+from typing import List, Optional
+import bcrypt
 
-from enums import RoleName, Currency
-from .base import Entity
-from .finance import Balance
+from .base import BaseEntity
+from .enums import Currency, RoleName
+from .finance import Transaction, Balance
 from .predict import PredictTask, Predict
-from .finance import Transaction
 
 
-class User(Entity):
-    def __init__(self, id: int, login: str, email: str,
-                 display_name: str, password_hash: str, role: Role,
-                 transactions_history: Optional[list[Transaction]] = None,
-                 predictions_history: Optional[list[tuple[PredictTask, Predict]]] = None):
-        super().__init__(id)
-        self._login = login
-        self._email = email
-        self._display_name = display_name
-        self._password_hash = password_hash
-        self._is_active = True
-        self._balance = Balance(1, 0.0, Currency.RUB, id)
-        self._role = role
-        self._transactions_history = transactions_history if transactions_history is not None else []
-        self._predictions_history = predictions_history if predictions_history is not None else []
+class User(BaseEntity):
+    __tablename__ = "users"
 
-    @property
-    def login(self) -> str:
-        return self._login
+    login = Column(String(64), unique=True, nullable=False, index=True)
+    email = Column(String(128), unique=True, nullable=False, index=True)
+    display_name = Column(String(128), nullable=False)
+    password_hash = Column("password_hash", String(256), nullable=False)
+    is_active = Column(Boolean, default=True)
 
-    @property
-    def email(self) -> str:
-        return self._email
+    role_id: Mapped[int] = mapped_column(
+        ForeignKey("roles.id"), nullable=False)
 
-    @property
-    def display_name(self) -> str:
-        return self._display_name
+    balance: Mapped["Balance"] = relationship(
+        "Balance",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan"
+    )
 
-    @property
-    def balance(self) -> Balance:
-        return self._balance
+    transactions: Mapped[List["Transaction"]] = relationship(
+        "Transaction",
+        back_populates="user",
+        cascade="all, delete-orphan"
+    )
 
-    @property
-    def role(self) -> Role:
-        return self._role
+    predict_tasks: Mapped[List["PredictTask"]] = relationship(
+        "PredictTask",
+        back_populates="user",
+        cascade="all, delete-orphan"
+    )
 
-    def verify_password(self, password_hash: str) -> bool:
-        return self._password_hash == password_hash
+    role: Mapped["Role"] = relationship("Role", back_populates="users")
 
-    def change_password(self, old_password_hash: str, new_password_hash: str) -> bool:
-        if self.verify_password(old_password_hash):
-            self._password_hash = new_password_hash
+    def __init__(self, login: str, email: str, display_name: str,
+                 password: str, role_id: int):
+        self.login = login
+        self.email = email
+        self.display_name = display_name
+        self.role_id = role_id
+        self.is_active = True
+
+        self.set_password(password)
+
+        self.balance = Balance(value=0.0, currency=Currency.RUB)
+
+    def set_password(self, password: str):
+        salt = bcrypt.gensalt()
+        self.password_hash = bcrypt.hashpw(password.encode(), salt).decode()
+
+    def verify_password(self, password: str) -> bool:
+        return bcrypt.checkpw(password.encode(), self.password_hash.encode())
+
+    def change_password(self, old_password: str, new_password: str) -> bool:
+        if self.verify_password(old_password):
+            self.set_password(new_password)
             self.update_timestamp()
             return True
         return False
 
     def add_transaction(self, transaction: Transaction):
-        self._transactions_history.append(transaction)
+        self.transactions.append(transaction)
         self.update_timestamp()
 
-    def add_prediction(self, task: PredictTask, predict: Predict):
-        self._predictions_history.append((task, predict))
+    def add_predict_task(self, task: PredictTask):
+        self.predict_tasks.append(task)
         self.update_timestamp()
 
 
-class Role(Entity):
-    def __init__(self, id: int, name: RoleName):
-        super().__init__(id)
-        self._name = name
+class Role(BaseEntity):
+    __tablename__ = "roles"
 
-    @property
-    def name(self) -> RoleName:
-        return self._name
+    name = Column(SQLAlchemyEnum(RoleName), nullable=False, unique=True)
 
-    @name.setter
-    def name(self, value: RoleName):
-        self._name = value
-        self.update_timestamp()
+    users: Mapped[List["User"]] = relationship("User", back_populates="role")
