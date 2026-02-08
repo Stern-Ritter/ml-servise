@@ -1,7 +1,9 @@
-from sqlalchemy import Column, String, Boolean, ForeignKey, Table, Enum as SQLAlchemyEnum
+from pydantic import BaseModel, EmailStr
+from sqlalchemy import Column, String, Boolean, ForeignKey, Enum as SQLAlchemyEnum
 from sqlalchemy.orm import relationship, Mapped, mapped_column
-from typing import List, Optional
 import bcrypt
+
+from typing import List, Optional
 
 from .base import BaseEntity
 from .enums import Currency, RoleName
@@ -52,8 +54,6 @@ class User(BaseEntity):
 
         self.set_password(password)
 
-        self.balance = Balance(value=0.0, currency=Currency.RUB)
-
     def set_password(self, password: str):
         salt = bcrypt.gensalt()
         self.password_hash = bcrypt.hashpw(password.encode(), salt).decode()
@@ -83,3 +83,30 @@ class Role(BaseEntity):
     name = Column(SQLAlchemyEnum(RoleName), nullable=False, unique=True)
 
     users: Mapped[List["User"]] = relationship("User", back_populates="role")
+
+
+class RoleCreate(BaseModel):
+    name: RoleName
+
+
+class UserCreate(BaseModel):
+    login: str
+    password: str
+    email: EmailStr
+    display_name: str
+
+
+class UserUpdate(BaseModel):
+    login: Optional[str] = None
+    email: Optional[EmailStr] = None
+    display_name: Optional[str] = None
+
+
+class UserLogin(BaseModel):
+    login: str
+    password: str
+
+
+class UserChangePassword(BaseModel):
+    old_password: str
+    new_password: str

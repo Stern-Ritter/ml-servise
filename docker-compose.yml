@@ -2,16 +2,20 @@ version: '3.8'
 
 services:
   app:
-    build: ./app
+    build:
+      context: .
     env_file:
       - .env
     volumes:
       - ./app:/app
+    ports:
+      - "8000:8000"
     networks:
       - service-network
     depends_on:
       - database
       - rabbitmq
+    restart: unless-stopped
 
   web-proxy:
     image: nginx:latest

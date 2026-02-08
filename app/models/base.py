@@ -29,9 +29,3 @@ class BaseEntity(Base, TimestampMixin):
             attributes.append(f'{column.name}={value}')
 
         return f'{class_name}({", ".join(attributes)})'
-
-
-class BaseMLModel(ABC):
-    @abstractmethod
-    def predict(self, data: dict) -> dict:
-        pass
