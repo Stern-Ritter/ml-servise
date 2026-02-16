@@ -1,4 +1,5 @@
 import logging
+import joblib
 import pika
 import time
 
@@ -9,13 +10,31 @@ from worker import Worker
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
 
 def main():
     settings = get_settings()
-    ml_service = MLService()
+    try:
+        model = joblib.load(settings.MODEL_PATH)
+        preprocessing_pipeline = joblib.load(
+            settings.MODEL_PREPROCESSING_PIPELINE_PATH)
+        required_features = joblib.load(settings.MODEL_REQUIRED_FEATURES_PATH)
+
+        ml_service = MLService(
+            model,
+            preprocessing_pipeline,
+            required_features,
+            threshold=settings.DEFAULT_THRESHOLD
+        )
+
+        if settings.MODEL_OPTIMAL_THRESHOLD_PATH:
+            optimal_threshold = joblib.load(
+                settings.MODEL_OPTIMAL_THRESHOLD_PATH)
+            ml_service.threshold = optimal_threshold
+
+    except Exception as e:
+        print(f"Error loading models: {e}")
+        raise
+
     worker = Worker(ml_service)
 
     connection_parameters = pika.ConnectionParameters(

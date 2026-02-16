@@ -19,12 +19,22 @@ class Worker:
     def callback(self, ch, method, properties, body):
         session = SessionLocal()
         try:
+            is_model_loaded = self.ml_service.model is not None
+            is_preprocessing_pipeline_loaded = self.ml_service.preprocessing_pipeline is not None
+            is_required_features_loaded = self.ml_service.required_features is not None
+            if not (is_model_loaded and is_preprocessing_pipeline_loaded and is_required_features_loaded):
+                logger.error(
+                    f"ML model is loaded: {is_model_loaded}, preprocessing pipeline is loaded: {is_preprocessing_pipeline_loaded}, Features are loaded: {is_required_features_loaded}"
+                )
+                raise ValueError(
+                    f"ML model is loaded: {is_model_loaded}, preprocessing pipeline is loaded: {is_preprocessing_pipeline_loaded}, Features are loaded: {is_required_features_loaded}")
+
             message = json.loads(body)
             task_id = message.get('task_id')
             if not task_id:
                 logger.error(f"Invalid message: missing task_id: {message}")
-                ch.basic_ack(delivery_tag=method.delivery_tag)
-                return
+                raise ValueError(
+                    f"Invalid message: missing task_id: {message}")
 
             logger.info(f"Received task with id: {task_id}")
 

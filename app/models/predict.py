@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 class Patient(BaseEntity):
     __tablename__ = "patients"
 
-    age = Column(Integer, nullable=False)
+    age = Column(Float, nullable=False)
     gender = Column(SQLAlchemyEnum(Gender), nullable=False)
     physical_activity_days_per_week = Column(Integer, nullable=False)
     stress_level = Column(Integer, nullable=False)
