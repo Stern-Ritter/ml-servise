@@ -1,3 +1,7 @@
+from datetime import datetime, timezone
+import json
+import pika
+import logging
 from typing import Optional, List
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import select
@@ -5,7 +9,6 @@ from sqlalchemy import select
 from models.predict import (
     Patient,
     PredictTask,
-    Predict,
     PatientCreate,
     PatientUpdate,
     PredictTaskCreate,
@@ -14,13 +17,17 @@ from models.predict import (
 from models.user import User
 from models.finance import Transaction
 from models.enums import Currency, PredictStatus, TransactionType
-from .ml_service import MLService
 from exceptions import (
     NotFoundException,
     BadRequestException,
     InsufficientFundsException,
     InternalServerErrorException
 )
+
+from config import get_settings
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class PatientService:
@@ -62,10 +69,21 @@ class PatientService:
 
 
 class PredictService:
-    def __init__(self, db: Session, patient_service: PatientService, ml_service: MLService):
+    def __init__(self, db: Session, patient_service: PatientService):
         self.db = db
+        self.settings = get_settings()
+        self.connection_params = pika.ConnectionParameters(
+            host=self.settings.RABBITMQ_HOST,
+            port=self.settings.RABBITMQ_PORT,
+            virtual_host='/',
+            credentials=pika.PlainCredentials(
+                username=self.settings.RABBITMQ_USER,
+                password=self.settings.RABBITMQ_PASSWORD
+            ),
+            heartbeat=30,
+            blocked_connection_timeout=2
+        )
         self.patient_service = patient_service
-        self.ml_service = ml_service
 
     def get_predict_task_by_id(self, task_id: int) -> PredictTask:
         task = self.db.get(PredictTask, task_id)
@@ -123,7 +141,7 @@ class PredictService:
 
         return task
 
-    def process_predict_task(self, task_id: int, cost: float) -> Optional[Predict]:
+    def process_predict_task(self, task_id: int, cost: float) -> int:
         task = self.get_predict_task_with_details_by_id(task_id)
 
         if task.status != PredictStatus.PENDING:
@@ -153,23 +171,12 @@ class PredictService:
                 description="Withdraw for predict task",
                 user_id=task.user_id
             )
-
-            patient_data = task.patient._to_dict()
-            prediction_result = self.ml_service.predict(patient_data)
-
-            predict = Predict(
-                prediction=prediction_result["prediction"],
-                probability=prediction_result["probability"],
-                task_id=task.id
-            )
-
             self.db.add(transaction)
-            self.db.add(predict)
-            task.status = PredictStatus.COMPLETED
-            self.db.flush()
-            self.db.refresh(predict)
 
-            return predict
+            self._publish_predict_task(task)
+
+            self.db.flush()
+            return task.id
 
         except InsufficientFundsException:
             raise
@@ -219,3 +226,36 @@ class PredictService:
                              ).limit(limit).offset(offset)
 
         return list(self.db.scalars(stmt).all())
+
+    def _publish_predict_task(self, task: PredictTask):
+        try:
+            patient = task.patient
+            if not patient:
+                raise ValueError(f"Task {task.id} has no associated patient")
+
+            features = patient._to_dict()
+            message = {
+                "task_id": str(task.id),
+                "features": features,
+                "model": "demo_model",
+                "timestamp": datetime.now(timezone.utc).isoformat(timespec='seconds') + "Z"
+            }
+
+            connection = pika.BlockingConnection(self.connection_params)
+            channel = connection.channel()
+            channel.queue_declare(queue=self.settings.QUEUE_NAME, durable=True)
+
+            channel.basic_publish(
+                exchange='',
+                routing_key=self.settings.QUEUE_NAME,
+                body=json.dumps(message),
+                properties=pika.BasicProperties(delivery_mode=2)
+            )
+            connection.close()
+
+            logger.info(
+                f"Task with id {task.id} published to queue {self.settings.QUEUE_NAME}"
+            )
+        except Exception as e:
+            logger.error(f"Failed to publish task with id {task.id}: {e}")
+            raise
