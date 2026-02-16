@@ -1,6 +1,9 @@
+from pydantic import BaseModel
 from sqlalchemy import Column, Integer, Float, Boolean, ForeignKey, Enum as SQLAlchemyEnum
 from sqlalchemy.orm import relationship, Mapped, mapped_column
-from typing import TYPE_CHECKING, Optional
+
+from typing import Dict, Any, Optional, TYPE_CHECKING
+from datetime import datetime
 
 from .base import BaseEntity
 from .enums import Gender, PredictStatus
@@ -35,6 +38,27 @@ class Patient(BaseEntity):
         back_populates="patient",
         cascade="all, delete-orphan"
     )
+
+    def _to_dict(self) -> Dict[str, Any]:
+        return {
+            "age": self.age,
+            "gender": self.gender,
+            "physical_activity_days_per_week": self.physical_activity_days_per_week,
+            "stress_level": self.stress_level,
+            "bmi": self.bmi,
+            "exercise_hours_per_week": self.exercise_hours_per_week,
+            "sedentary_hours_per_day": self.sedentary_hours_per_day,
+            "sleep_hours_per_day": self.sleep_hours_per_day,
+            "heart_rate": self.heart_rate,
+            "cholesterol": self.cholesterol,
+            "blood_sugar": self.blood_sugar,
+            "triglycerides": self.triglycerides,
+            "smoking": self.smoking,
+            "alcohol_consumption": self.alcohol_consumption,
+            "diabetes": self.diabetes,
+            "obesity": self.obesity,
+            "family_history": self.family_history
+        }
 
 
 class PredictTask(BaseEntity):
@@ -75,3 +99,56 @@ class Predict(BaseEntity):
 
     task: Mapped["PredictTask"] = relationship(
         "PredictTask", back_populates="predict")
+
+
+class PatientCreate(BaseModel):
+    age: int
+    gender: Gender
+    physical_activity_days_per_week: int
+    stress_level: int
+    bmi: float
+    exercise_hours_per_week: float
+    sedentary_hours_per_day: float
+    sleep_hours_per_day: float
+    heart_rate: float
+    cholesterol: float
+    blood_sugar: float
+    triglycerides: float
+    smoking: bool = False
+    alcohol_consumption: bool = False
+    diabetes: bool = False
+    obesity: bool = False
+    family_history: bool = False
+
+
+class PatientUpdate(BaseModel):
+    age: Optional[int] = None
+    gender: Optional[Gender] = None
+    physical_activity_days_per_week: Optional[int] = None
+    stress_level: Optional[int] = None
+    bmi: Optional[float] = None
+    exercise_hours_per_week: Optional[float] = None
+    sedentary_hours_per_day: Optional[float] = None
+    sleep_hours_per_day: Optional[float] = None
+    heart_rate: Optional[float] = None
+    cholesterol: Optional[float] = None
+    blood_sugar: Optional[float] = None
+    triglycerides: Optional[float] = None
+    smoking: Optional[bool] = None
+    alcohol_consumption: Optional[bool] = None
+    diabetes: Optional[bool] = None
+    obesity: Optional[bool] = None
+    family_history: Optional[bool] = None
+
+
+class PredictTaskCreate(BaseModel):
+    patient_id: int
+    user_id: int
+
+
+class PredictTaskFilter(BaseModel):
+    status: Optional[PredictStatus] = None
+    min_cost: Optional[float] = None
+    max_cost: Optional[float] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None

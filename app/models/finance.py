@@ -1,6 +1,9 @@
+from pydantic import BaseModel
 from sqlalchemy import Column, Float, String, ForeignKey, Enum as SQLAlchemyEnum
 from sqlalchemy.orm import relationship, Mapped, mapped_column
-from typing import TYPE_CHECKING
+
+from typing import TYPE_CHECKING, Optional
+from datetime import datetime
 
 from .base import BaseEntity
 from .enums import Currency, TransactionType
@@ -20,19 +23,13 @@ class Balance(BaseEntity):
 
     user: Mapped["User"] = relationship("User", back_populates="balance")
 
-    def deposit(self, amount: float) -> bool:
-        if amount <= 0:
-            return False
+    def deposit(self, amount: float):
         self.value += amount
         self.update_timestamp()
-        return True
 
-    def withdraw(self, amount: float) -> bool:
-        if amount <= 0 or amount > self.value:
-            return False
+    def withdraw(self, amount: float):
         self.value -= amount
         self.update_timestamp()
-        return True
 
 
 class Transaction(BaseEntity):
@@ -46,3 +43,27 @@ class Transaction(BaseEntity):
         ForeignKey("users.id"), nullable=False)
 
     user: Mapped["User"] = relationship("User", back_populates="transactions")
+
+
+class DepositRequest(BaseModel):
+    user_id: int
+    amount: float
+    currency: Optional[Currency] = None
+    description: Optional[str] = None
+
+
+class WithdrawRequest(BaseModel):
+    user_id: int
+    amount: float
+    currency: Optional[Currency] = None
+    description: Optional[str] = None
+
+
+class TransactionFilter(BaseModel):
+    type: Optional[TransactionType] = None
+    currency: Optional[Currency] = None
+    min_amount: Optional[float] = None
+    max_amount: Optional[float] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    description: Optional[str] = None

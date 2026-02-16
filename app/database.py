@@ -1,8 +1,10 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 from contextlib import contextmanager
 from typing import Generator
-from .config import get_settings
+
+from config import get_settings
+from seed import seed_database
 
 
 def get_database_engine():
@@ -24,24 +26,15 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 def get_session() -> Generator[Session, None, None]:
-    session = SessionLocal()
+    db = SessionLocal()
     try:
-        yield session
-    finally:
-        session.close()
-
-
-@contextmanager
-def session_scope() -> Generator[Session, None, None]:
-    session = SessionLocal()
-    try:
-        yield session
-        session.commit()
+        yield db
+        db.commit()
     except Exception:
-        session.rollback()
+        db.rollback()
         raise
     finally:
-        session.close()
+        db.close()
 
 
 def init_db(drop_all: bool = False) -> None:
@@ -55,5 +48,18 @@ def init_db(drop_all: bool = False) -> None:
             Base.metadata.drop_all(engine)
 
         Base.metadata.create_all(engine)
+        seed_database()
     except Exception as e:
         raise
+
+
+def health_check_db() -> str:
+    try:
+        session = SessionLocal()
+        try:
+            session.execute(text("SELECT 1"))
+            return "connected"
+        finally:
+            session.close()
+    except Exception as e:
+        return f"disconnected: {e}"
