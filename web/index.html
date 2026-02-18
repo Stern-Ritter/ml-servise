@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="ru">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ML Service — Личный кабинет</title>
+  <style>
+    .hidden {
+      display: none !important;
+    }
+  </style>
+  <link rel="stylesheet" href="./styles.css" />
+  <script src="./config.js"></script>
+  <script defer src="./app.js"></script>
+</head>
+
+<body>
+  <header class="topbar">
+    <div class="container topbar__inner">
+      <a class="brand" href="#/home">
+        <span class="brand__name">ML Service</span>
+        <span class="brand__tag">личный кабинет</span>
+      </a>
+      <nav class="nav" id="nav">
+        <a class="nav__link" href="#/home">Главная</a>
+        <a class="nav__link auth-only" href="#/dashboard">Кабинет</a>
+        <a class="nav__link auth-only" href="#/predict">ML-запрос</a>
+        <a class="nav__link auth-only" href="#/history">История</a>
+        <a class="nav__link" href="#/settings">Настройки</a>
+        <span class="nav__spacer"></span>
+        <a class="nav__link guest-only" href="#/login">Вход</a>
+        <a class="nav__link guest-only" href="#/signup">Регистрация</a>
+        <button class="btn btn--ghost auth-only" id="btnLogout" type="button">
+          Выйти
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <div id="globalAlert" class="alert hidden" role="alert"></div>
+
+    <section class="page" id="page-home">
+      <h1>ML‑сервис предсказания риска сердечных заболеваний</h1>
+      <p class="muted">
+        Вы создаёте пациента, отправляете ML‑запрос и получаете
+        предсказание.
+      </p>
+
+      <div class="grid grid--2">
+        <div class="card">
+          <h2>Что умеет сервис</h2>
+          <ul class="list">
+            <li>Регистрация и вход в личный кабинет</li>
+            <li>Просмотр баланса и пополнение (без эквайринга)</li>
+            <li>ML‑предсказание через форму или CSV</li>
+            <li>История транзакций и предсказаний</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h2>Как это работает</h2>
+          <ol class="list">
+            <li>Вы входите и получаете доступ к кабинету</li>
+            <li>Пополняете баланс (кредиты)</li>
+            <li>Отправляете ML‑запрос</li>
+            <li>Смотрите результаты и историю</li>
+          </ol>
+          <div class="actions">
+            <a class="btn btn--primary guest-only" href="#/login">Войти</a>
+            <a class="btn btn--primary guest-only" href="#/signup">Зарегистрироваться</a>
+            <a class="btn btn--primary auth-only" href="#/predict">Сделать ML‑запрос</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="page hidden" id="page-login">
+      <h1>Вход</h1>
+      <form class="card form" id="formLogin">
+        <div class="form__row">
+          <label class="label">
+            <span>Логин</span>
+            <input class="input" name="login" autocomplete="username" required />
+          </label>
+        </div>
+        <div class="form__row">
+          <label class="label">
+            <span>Пароль</span>
+            <input class="input" name="password" type="password" autocomplete="current-password" required />
+          </label>
+        </div>
+        <div class="form__row">
+          <button class="btn btn--primary" type="submit">Войти</button>
+          <a class="btn btn--ghost" href="#/signup">Нет аккаунта</a>
+        </div>
+      </form>
+    </section>
+
+    <section class="page hidden" id="page-signup">
+      <h1>Регистрация</h1>
+      <form class="card form" id="formSignup">
+        <div class="grid grid--2">
+          <label class="label">
+            <span>Логин</span>
+            <input class="input" name="login" autocomplete="username" required />
+          </label>
+          <label class="label">
+            <span>Email</span>
+            <input class="input" name="email" type="email" autocomplete="email" required />
+          </label>
+          <label class="label">
+            <span>Отображаемое имя</span>
+            <input class="input" name="display_name" autocomplete="name" required />
+          </label>
+          <label class="label">
+            <span>Пароль</span>
+            <input class="input" name="password" type="password" autocomplete="new-password" required minlength="6" />
+          </label>
+        </div>
+        <div class="form__row">
+          <button class="btn btn--primary" type="submit">Создать аккаунт</button>
+          <a class="btn btn--ghost" href="#/login">Уже есть аккаунт</a>
+        </div>
+      </form>
+    </section>
+
+    <section class="page hidden" id="page-dashboard">
+      <div class="page__header">
+        <div>
+          <h1>Личный кабинет</h1>
+          <div class="muted" id="userSummary">—</div>
+        </div>
+        <div class="actions">
+          <button class="btn btn--ghost" type="button" id="btnRefreshDashboard">Обновить</button>
+        </div>
+      </div>
+
+      <div class="grid grid--2">
+        <div class="card">
+          <h2>Баланс</h2>
+          <div class="kpi">
+            <div class="kpi__value" id="balanceValue">—</div>
+            <div class="kpi__hint muted" id="balanceMeta">—</div>
+          </div>
+          <div class="divider"></div>
+          <form class="form" id="formDeposit">
+            <div class="grid grid--2">
+              <label class="label">
+                <span>Сумма пополнения</span>
+                <input class="input" name="amount" type="number" min="1" step="1" required />
+              </label>
+              <label class="label">
+                <span>Валюта</span>
+                <select class="input" name="currency" required>
+                  <option value="RUB" selected>RUB</option>
+                  <option value="USD">USD</option>
+                  <option value="EUR">EUR</option>
+                </select>
+              </label>
+            </div>
+            <label class="label">
+              <span>Описание (опционально)</span>
+              <input class="input" name="description" placeholder="Например: пополнение для ML-запросов" />
+            </label>
+            <div class="form__row">
+              <button class="btn btn--primary" type="submit">Пополнить баланс</button>
+            </div>
+            <div class="muted small">
+              Эквайринг не реализован. Операция имитируется вызовом backend API.
+            </div>
+          </form>
+        </div>
+
+        <div class="card">
+          <h2>Быстрые действия</h2>
+          <div class="actions">
+            <a class="btn btn--primary" href="#/predict">Сделать ML‑запрос</a>
+            <a class="btn btn--ghost" href="#/history">Открыть историю</a>
+          </div>
+          <div class="divider"></div>
+          <div class="muted">
+            Стоимость ML‑запроса по умолчанию: <b id="predictCostLabel">100</b> кредитов.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="page hidden" id="page-predict">
+      <div class="page__header">
+        <div>
+          <h1>ML‑запрос</h1>
+          <div class="muted">
+            Поддерживается загрузка через форму и через CSV‑файл.
+          </div>
+        </div>
+        <div class="actions">
+          <button class="btn btn--ghost" type="button" id="btnRefreshPredict">Обновить баланс</button>
+        </div>
+      </div>
+
+      <div class="grid grid--2">
+        <div class="card">
+          <h2>Ввод данных пациента:</h2>
+          <form class="form" id="formPredictSingle">
+            <div class="grid grid--2">
+              <label class="label"><span>Возраст</span><input class="input" name="age" type="number" min="0" step="1"
+                  required /></label>
+              <label class="label">
+                <span>Пол</span>
+                <select class="input" name="gender" required>
+                  <option value="male">male</option>
+                  <option value="female">female</option>
+                  <option value="other">other</option>
+                </select>
+              </label>
+              <label class="label"><span>Физ. активность (дней/нед)</span><input class="input"
+                  name="physical_activity_days_per_week" type="number" min="0" step="1" required /></label>
+              <label class="label"><span>Стресс (1–10)</span><input class="input" name="stress_level" type="number"
+                  min="1" max="10" step="1" required /></label>
+              <label class="label"><span>BMI</span><input class="input" name="bmi" type="number" min="0" step="0.1"
+                  required /></label>
+              <label class="label"><span>Упражнения (час/нед)</span><input class="input" name="exercise_hours_per_week"
+                  type="number" min="0" step="0.1" required /></label>
+              <label class="label"><span>Сидячее время (час/день)</span><input class="input"
+                  name="sedentary_hours_per_day" type="number" min="0" step="0.1" required /></label>
+              <label class="label"><span>Сон (час/день)</span><input class="input" name="sleep_hours_per_day"
+                  type="number" min="0" step="0.1" required /></label>
+              <label class="label"><span>Пульс</span><input class="input" name="heart_rate" type="number" min="0"
+                  step="0.1" required /></label>
+              <label class="label"><span>Холестерин</span><input class="input" name="cholesterol" type="number" min="0"
+                  step="0.1" required /></label>
+              <label class="label"><span>Сахар крови</span><input class="input" name="blood_sugar" type="number" min="0"
+                  step="0.1" required /></label>
+              <label class="label"><span>Триглицериды</span><input class="input" name="triglycerides" type="number"
+                  min="0" step="0.1" required /></label>
+            </div>
+            <div class="grid grid--2">
+              <label class="check"><input type="checkbox" name="smoking" /> Курение</label>
+              <label class="check"><input type="checkbox" name="alcohol_consumption" /> Алкоголь</label>
+              <label class="check"><input type="checkbox" name="diabetes" /> Диабет</label>
+              <label class="check"><input type="checkbox" name="obesity" /> Ожирение</label>
+              <label class="check"><input type="checkbox" name="family_history" /> Наследственность</label>
+            </div>
+            <div class="form__row">
+              <button class="btn btn--primary" type="submit">Отправить ML‑запрос</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="card">
+          <h2>CSV‑файл</h2>
+          <div class="muted small">
+            Первая строка — заголовки. Поля должны совпадать с именами в форме.
+          </div>
+          <div class="divider"></div>
+          <form class="form" id="formPredictCsv">
+            <label class="label">
+              <span>CSV файл</span>
+              <input class="input" name="file" type="file" accept=".csv,text/csv" required />
+            </label>
+            <div class="form__row">
+              <button class="btn btn--primary" type="submit">Загрузить и обработать</button>
+            </div>
+          </form>
+          <div class="divider"></div>
+          <details>
+            <summary>Пример CSV</summary>
+            <pre class="code">age,gender,physical_activity_days_per_week,stress_level,bmi,exercise_hours_per_week,sedentary_hours_per_day,sleep_hours_per_day,heart_rate,cholesterol,blood_sugar,triglycerides,smoking,alcohol_consumption,diabetes,obesity,family_history
+45,male,3,6,24.3,2.5,8.0,7.0,72,180,90,140,false,false,false,false,true</pre>
+          </details>
+        </div>
+      </div>
+
+      <div class="card hidden" id="predictResults">
+        <div class="page__header">
+          <h2>Результаты</h2>
+          <div class="actions">
+            <button class="btn btn--ghost" id="btnClearResults" type="button">Очистить</button>
+          </div>
+        </div>
+        <div class="grid grid--2">
+          <div>
+            <h3>Принятые (обработаны)</h3>
+            <div class="table-wrap">
+              <table class="table" id="tableAccepted">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Номер задачи</th>
+                    <th>Статус</th>
+                    <th>Предсказание</th>
+                    <th>Вероятность</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+          <div>
+            <h3>Отклонённые (ошибки валидации)</h3>
+            <div class="table-wrap">
+              <table class="table" id="tableRejected">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Ошибки</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="page hidden" id="page-history">
+      <div class="page__header">
+        <div>
+          <h1>История</h1>
+          <div class="muted">Транзакции и ML‑запросы для текущего пользователя</div>
+        </div>
+        <div class="actions">
+          <button class="btn btn--ghost" type="button" id="btnRefreshHistory">Обновить</button>
+        </div>
+      </div>
+
+      <div class="grid grid--2">
+        <div class="card">
+          <h2>Транзакции</h2>
+          <div class="table-wrap">
+            <table class="table" id="tableTx">
+              <thead>
+                <tr>
+                  <th>Дата</th>
+                  <th>Тип</th>
+                  <th>Сумма</th>
+                  <th>Валюта</th>
+                  <th>Описание</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card">
+          <h2>ML‑задачи</h2>
+          <div class="table-wrap">
+            <table class="table" id="tablePred">
+              <thead>
+                <tr>
+                  <th>Дата</th>
+                  <th>Статус</th>
+                  <th>Стоимость</th>
+                  <th>Предсказание</th>
+                  <th>Вероятность</th>
+                  <th>Номер задачи</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="page hidden" id="page-settings">
+      <h1>Настройки</h1>
+      <div class="card">
+        <h2>Подключение к API</h2>
+        <div class="muted">
+          Backend использует префикс <code>/api/&lt;API_VERSION&gt;</code>. В примере окружения это
+          <code>/api/1.0</code>.
+        </div>
+        <div class="divider"></div>
+        <form class="form" id="formApiPrefix">
+          <label class="label">
+            <span>API prefix</span>
+            <input class="input" name="apiPrefix" placeholder="/api/1.0" />
+          </label>
+          <div class="form__row">
+            <button class="btn btn--primary" type="submit">Сохранить</button>
+            <button class="btn btn--ghost" type="button" id="btnResetApiPrefix">Сбросить</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <footer class="footer muted small">
+      <div>ML Service UI. Backend API: <span id="apiPrefixLabel">—</span></div>
+    </footer>
+  </main>
+</body>
+
+</html>

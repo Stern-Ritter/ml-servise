@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     API_VERSION: Optional[str] = None
     DEBUG: Optional[bool] = None
 
+    JWT_SECRET_KEY: Optional[str] = None
+    JWT_ALGORITHM: str = "HS256"
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+
     @property
     def DATABASE_URL_psycopg(self):
         return f'postgresql+psycopg://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}'
@@ -40,7 +44,8 @@ class Settings(BaseSettings):
             self.RABBITMQ_PORT,
             self.RABBITMQ_USER,
             self.RABBITMQ_PASSWORD,
-            self.QUEUE_NAME
+            self.QUEUE_NAME,
+            self.JWT_SECRET_KEY
         ]):
             raise ValueError("Missing required configuration")
 

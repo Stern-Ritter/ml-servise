@@ -4,7 +4,7 @@ from typing import Dict
 
 from database import get_session
 from services.user_service import UserService, RoleService
-from models.user import UserCreate, UserLogin
+from models.user import UserCreate, UserLogin, User
 from exceptions import (
     NotFoundException,
     BadRequestException,
@@ -12,6 +12,7 @@ from exceptions import (
     ForbiddenException,
     ConflictException
 )
+from security import create_access_token, get_current_user
 
 router = APIRouter()
 
@@ -107,21 +108,7 @@ async def signin(
     Аутентификация пользователя в системе.
 
     Проверяет учетные данные пользователя (логин и пароль) и возвращает
-    идентификатор пользователя при успешной аутентификации.
-
-    Args:
-        login_data: Данные для входа, включая:
-            - login: Логин пользователя
-            - password: Пароль пользователя
-
-    Returns:
-        Dict с сообщением об успешном входе и ID пользователя
-
-    Raises:
-        HTTPException 401: Если пароль неверен
-        HTTPException 403: Если учетная запись пользователя деактивирована
-        HTTPException 404: Если пользователь с таким логином не найден
-        HTTPException 500: При внутренних ошибках сервера
+    JWT access token и идентификатор пользователя при успешной аутентификации.
     """
     role_service = RoleService(db)
     user_service = UserService(db, role_service)
@@ -129,8 +116,12 @@ async def signin(
     try:
         user = user_service.authenticate_user(login_data)
         return {
-            "message": "Login successful",
-            "user_id": str(user.id)
+            "access_token": create_access_token(user_id=user.id),
+            "token_type": "bearer",
+            "user_id": str(user.id),
+            "display_name": user.display_name,
+            "login": user.login,
+            "message": "Login successful"
         }
     except UnauthorizedException as e:
         raise HTTPException(
@@ -152,3 +143,21 @@ async def signin(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error"
         )
+
+
+@router.get(
+    "/me",
+    summary="Get current authenticated user",
+    description="Return information about the user associated with the provided JWT access token",
+)
+async def read_me(current_user: User = Depends(get_current_user)) -> Dict:
+    return {
+        "id": current_user.id,
+        "login": current_user.login,
+        "email": current_user.email,
+        "display_name": current_user.display_name,
+        "is_active": current_user.is_active,
+        "role_id": current_user.role_id,
+        "created_at": current_user.created_at,
+        "updated_at": current_user.updated_at,
+    }
