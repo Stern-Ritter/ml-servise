@@ -2,17 +2,27 @@ version: '3.8'
 
 services:
   app:
-    build:
-      context: .
+    build: ./app
     env_file:
-      - .env
-    volumes:
-      - ./app:/app
-    ports:
-      - "8000:8000"
+      - ./app/.env
     networks:
       - service-network
     depends_on:
+
+      - database
+      - rabbitmq
+    restart: unless-stopped
+
+  ml_worker:
+    build:
+      context: .
+      dockerfile: ml_worker/Dockerfile
+    env_file:
+      - ./ml_worker/.env
+    networks:
+      - service-network
+    depends_on:
+      - app
       - database
       - rabbitmq
     restart: unless-stopped
@@ -22,6 +32,8 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     networks:
       - service-network
     depends_on:
@@ -30,6 +42,11 @@ services:
 
   rabbitmq:
     image: rabbitmq:management
+    hostname: rabbitmq
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD}
+      - RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbit disk_free_limit 2147483648
     ports:
       - "15672:15672"
       - "5672:5672"
@@ -37,6 +54,11 @@ services:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
       - service-network
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "check_running" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     restart: on-failure
 
   database:

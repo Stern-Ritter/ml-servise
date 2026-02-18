@@ -20,6 +20,13 @@ class Settings(BaseSettings):
     API_VERSION: Optional[str] = None
     DEBUG: Optional[bool] = None
 
+    MODEL_PATH: str = './model/heart_attack_model.pkl'
+    MODEL_PREPROCESSING_PIPELINE_PATH: str = './model/preprocessing_pipeline.pkl'
+    MODEL_REQUIRED_FEATURES_PATH: str = './model/feature_names.pkl'
+    MODEL_OPTIMAL_THRESHOLD_PATH: str = './model/optimal_threshold.pkl'
+
+    DEFAULT_THRESHOLD: float = 0.50
+
     @property
     def DATABASE_URL_psycopg(self):
         return f'postgresql+psycopg://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}'

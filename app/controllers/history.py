@@ -5,7 +5,6 @@ from typing import Dict, List, Optional
 from database import get_session
 from services.finance_service import FinanceService
 from services.predict_service import PredictService, PatientService
-from services.ml_service import MLService
 from models.finance import TransactionFilter
 from models.predict import PredictTaskFilter
 from models.enums import TransactionType, Currency, PredictStatus
@@ -23,8 +22,7 @@ def get_finance_service(db: Session = Depends(get_session)):
 
 def get_predict_service(db: Session = Depends(get_session)):
     patient_service = PatientService(db)
-    ml_service = MLService()
-    return PredictService(db, patient_service, ml_service)
+    return PredictService(db, patient_service)
 
 
 @router.get(

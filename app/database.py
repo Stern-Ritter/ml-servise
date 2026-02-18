@@ -1,6 +1,5 @@
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
-from contextlib import contextmanager
 from typing import Generator
 
 from config import get_settings

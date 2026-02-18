@@ -5,7 +5,6 @@ from typing import Dict, List, Optional
 
 from database import get_session
 from services.predict_service import PredictService, PatientService
-from services.ml_service import MLService
 from models.predict import PatientCreate, PatientUpdate, PredictTaskCreate, PredictTaskFilter
 from models.enums import PredictStatus
 from exceptions import (
@@ -23,8 +22,7 @@ DEFAULT_COST = 100
 
 def get_predict_service(db: Session = Depends(get_session)):
     patient_service = PatientService(db)
-    ml_service = MLService()
-    return PredictService(db, patient_service, ml_service)
+    return PredictService(db, patient_service)
 
 
 def get_patient_service(db: Session = Depends(get_session)):
@@ -376,15 +374,15 @@ async def process_predict_task(
         HTTPException 500: При ошибках ML-сервиса или внутренних ошибках сервера
     """
     try:
-        predict = predict_service.process_predict_task(task_id, DEFAULT_COST)
+        processed_task_id = predict_service.process_predict_task(
+            task_id, DEFAULT_COST)
 
         return {
-            "message": "Prediction completed successfully",
-            "task_id": str(task_id),
-            "prediction": predict.prediction,
-            "probability": predict.probability,
-            "cost": DEFAULT_COST
+            "message": "Task accepted for processing",
+            "task_id": str(processed_task_id),
+            "status": "processing"
         }
+
     except BadRequestException as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
