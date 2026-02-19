@@ -7,10 +7,12 @@ from services.finance_service import FinanceService
 from services.predict_service import PredictService, PatientService
 from models.finance import TransactionFilter
 from models.predict import PredictTaskFilter
+from models.user import User
 from models.enums import TransactionType, Currency, PredictStatus
 from exceptions import (
     NotFoundException
 )
+from security import get_current_user
 from datetime import datetime
 
 router = APIRouter()
@@ -38,6 +40,7 @@ def get_predict_service(db: Session = Depends(get_session)):
 )
 async def get_transaction_history(
     user_id: int,
+    current_user: User = Depends(get_current_user),
     transaction_type: Optional[TransactionType] = Query(
         None, description="Filter by transaction type (DEPOSIT/WITHDRAWAL)"),
     currency: Optional[Currency] = Query(
@@ -81,9 +84,15 @@ async def get_transaction_history(
         List[Dict] с детальной информацией о транзакциях
 
     Raises:
+        HTTPException 403: Если запрашивается история другого пользователя
         HTTPException 404: Если пользователь не найден
         HTTPException 500: При внутренних ошибках сервера
     """
+    if user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: cannot view another user's transaction history"
+        )
     try:
         filters = TransactionFilter(
             type=transaction_type,
@@ -136,6 +145,7 @@ async def get_transaction_history(
 )
 async def get_predict_history(
     user_id: int,
+    current_user: User = Depends(get_current_user),
     status: Optional[PredictStatus] = Query(
         None, description="Filter by prediction task status"),
     min_cost: Optional[float] = Query(
@@ -173,9 +183,15 @@ async def get_predict_history(
         List[Dict] с детальной информацией о задачах предсказания
 
     Raises:
+        HTTPException 403: Если запрашивается история другого пользователя
         HTTPException 404: Если пользователь не найден
         HTTPException 500: При внутренних ошибках сервера
     """
+    if user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: cannot view another user's prediction history"
+        )
     try:
         filters = PredictTaskFilter(
             status=status,
