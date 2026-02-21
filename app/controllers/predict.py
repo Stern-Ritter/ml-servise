@@ -6,6 +6,7 @@ from typing import Dict, List, Optional
 from database import get_session
 from services.predict_service import PredictService, PatientService
 from models.predict import PatientCreate, PatientUpdate, PredictTaskCreate, PredictTaskFilter
+from models.user import User
 from models.enums import PredictStatus
 from exceptions import (
     NotFoundException,
@@ -14,6 +15,7 @@ from exceptions import (
     ConflictException,
     InternalServerErrorException
 )
+from security import get_current_user
 
 router = APIRouter()
 
@@ -283,19 +285,17 @@ async def delete_patient(
 )
 async def create_predict_task(
     task_data: PredictTaskCreate,
-    predict_service: PredictService = Depends(get_predict_service)
+    predict_service: PredictService = Depends(get_predict_service),
+    current_user: User = Depends(get_current_user)
 ) -> Dict:
     """
     Создание задачи ML-предсказания.
 
-    Создает новую задачу предсказания для указанного пациента и пользователя.
-    Задача создается в статусе PENDING и требует последующей обработки
-    для получения результата предсказания.
+    Создает новую задачу предсказания для указанного пациента и текущего пользователя (JWT).
+    user_id в теле запроса игнорируется — используется идентификатор из токена.
 
     Args:
-        task_data: Данные для создания задачи:
-            - patient_id: Идентификатор пациента для предсказания
-            - user_id: Идентификатор пользователя, инициирующего предсказание
+        task_data: Данные для создания задачи (patient_id; user_id игнорируется).
 
     Returns:
         Dict с результатом создания:
@@ -308,8 +308,12 @@ async def create_predict_task(
         HTTPException 404: Если пользователь или пациент не найдены
         HTTPException 500: При внутренних ошибках сервера
     """
+    task_data_owned = PredictTaskCreate(
+        patient_id=task_data.patient_id,
+        user_id=current_user.id
+    )
     try:
-        task = predict_service.create_predict_task(task_data)
+        task = predict_service.create_predict_task(task_data_owned)
         return {
             "message": "Prediction task created successfully",
             "task_id": str(task.id),
@@ -346,7 +350,8 @@ async def create_predict_task(
 )
 async def process_predict_task(
     task_id: int,
-    predict_service: PredictService = Depends(get_predict_service)
+    predict_service: PredictService = Depends(get_predict_service),
+    current_user: User = Depends(get_current_user)
 ) -> Dict:
     """
     Обработка задачи ML-предсказания.
@@ -370,9 +375,22 @@ async def process_predict_task(
     Raises:
         HTTPException 400: Если задача не в статусе PENDING, стоимость не положительна
         HTTPException 400: Если недостаточно средств на балансе пользователя
+        HTTPException 403: Если задача принадлежит другому пользователю
         HTTPException 404: Если задача предсказания не найдена
         HTTPException 500: При ошибках ML-сервиса или внутренних ошибках сервера
     """
+    try:
+        task = predict_service.get_predict_task_with_details_by_id(task_id)
+    except NotFoundException as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e.detail)
+        )
+    if task.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: cannot process another user's task"
+        )
     try:
         processed_task_id = predict_service.process_predict_task(
             task_id, DEFAULT_COST)
@@ -423,7 +441,8 @@ async def process_predict_task(
 )
 async def get_predict_task(
     task_id: int,
-    predict_service: PredictService = Depends(get_predict_service)
+    predict_service: PredictService = Depends(get_predict_service),
+    current_user: User = Depends(get_current_user)
 ) -> Dict:
     """
     Получение детальной информации о задаче предсказания.
@@ -447,38 +466,36 @@ async def get_predict_task(
             - probability: Вероятность предсказания (только для COMPLETED задач)
 
     Raises:
+        HTTPException 403: Если задача принадлежит другому пользователю
         HTTPException 404: Если задача предсказания не найдена
         HTTPException 500: При внутренних ошибках сервера
     """
     try:
         task = predict_service.get_predict_task_with_details_by_id(task_id)
-
-        result = {
-            "task_id": str(task.id),
-            "status": task.status.value,
-            "cost": task.cost,
-            "created_at": task.created_at,
-            "user_id": task.user_id,
-            "patient_id": task.patient_id
-        }
-
-        if task.predict:
-            result.update({
-                "prediction": task.predict.prediction,
-                "probability": task.predict.probability
-            })
-
-        return result
     except NotFoundException as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e.detail)
         )
-    except Exception as e:
+    if task.user_id != current_user.id:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: cannot view another user's task"
         )
+    result = {
+        "task_id": str(task.id),
+        "status": task.status.value,
+        "cost": task.cost,
+        "created_at": task.created_at,
+        "user_id": task.user_id,
+        "patient_id": task.patient_id
+    }
+    if task.predict:
+        result.update({
+            "prediction": task.predict.prediction,
+            "probability": task.predict.probability
+        })
+    return result
 
 
 @router.get(
@@ -494,6 +511,7 @@ async def get_predict_task(
 )
 async def get_predict_tasks(
     user_id: int,
+    current_user: User = Depends(get_current_user),
     status: Optional[PredictStatus] = Query(
         None, description="Filter by task status"),
     min_cost: Optional[float] = Query(
@@ -537,9 +555,15 @@ async def get_predict_tasks(
             - probability: Вероятность предсказания (только для COMPLETED задач)
 
     Raises:
+        HTTPException 403: Если запрашиваются задачи другого пользователя
         HTTPException 404: Если пользователь не найден
         HTTPException 500: При внутренних ошибках сервера
     """
+    if user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: cannot view another user's tasks"
+        )
     try:
         filters = PredictTaskFilter(
             status=status,

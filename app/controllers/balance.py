@@ -5,11 +5,13 @@ from typing import Dict
 from database import get_session
 from services.finance_service import FinanceService
 from models.finance import DepositRequest, WithdrawRequest
+from models.user import User
 from exceptions import (
     NotFoundException,
     BadRequestException,
     InsufficientFundsException
 )
+from security import get_current_user
 
 router = APIRouter()
 
@@ -31,7 +33,8 @@ def get_finance_service(db: Session = Depends(get_session)):
 )
 async def get_balance(
     user_id: int,
-    finance_service: FinanceService = Depends(get_finance_service)
+    finance_service: FinanceService = Depends(get_finance_service),
+    current_user: User = Depends(get_current_user)
 ) -> Dict:
     """
     Получение текущего баланса пользователя.
@@ -50,9 +53,15 @@ async def get_balance(
             - updated_at: Время последнего обновления баланса
 
     Raises:
+        HTTPException 403: Если запрашивается баланс другого пользователя
         HTTPException 404: Если пользователь или его баланс не найден
         HTTPException 500: При внутренних ошибках сервера
     """
+    if user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: cannot view another user's balance"
+        )
     try:
         balance = finance_service.get_balance(user_id)
         return {
@@ -87,7 +96,8 @@ async def get_balance(
 )
 async def deposit(
     deposit_data: DepositRequest,
-    finance_service: FinanceService = Depends(get_finance_service)
+    finance_service: FinanceService = Depends(get_finance_service),
+    current_user: User = Depends(get_current_user)
 ) -> Dict:
     """
     Пополнение баланса пользователя.
@@ -111,9 +121,15 @@ async def deposit(
 
     Raises:
         HTTPException 400: Если сумма для пополнения не положительная
+        HTTPException 403: Если пополнение для другого пользователя
         HTTPException 404: Если пользователь или его баланс не найден
         HTTPException 500: При внутренних ошибках сервера
     """
+    if deposit_data.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: cannot deposit for another user"
+        )
     try:
         transaction = finance_service.deposit(deposit_data)
         balance = finance_service.get_balance(deposit_data.user_id)
@@ -155,7 +171,8 @@ async def deposit(
 )
 async def withdraw(
     withdraw_data: WithdrawRequest,
-    finance_service: FinanceService = Depends(get_finance_service)
+    finance_service: FinanceService = Depends(get_finance_service),
+    current_user: User = Depends(get_current_user)
 ) -> Dict:
     """
     Снятие средств с баланса пользователя.
@@ -180,9 +197,15 @@ async def withdraw(
     Raises:
         HTTPException 400: Если сумма для снятия не положительная
         HTTPException 400: Если недостаточно средств на балансе
+        HTTPException 403: Если снятие для другого пользователя
         HTTPException 404: Если пользователь или его баланс не найден
         HTTPException 500: При внутренних ошибках сервера
     """
+    if withdraw_data.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: cannot withdraw for another user"
+        )
     try:
         transaction = finance_service.withdraw(withdraw_data)
         balance = finance_service.get_balance(withdraw_data.user_id)

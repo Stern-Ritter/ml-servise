@@ -4,13 +4,14 @@ from typing import Dict
 
 from database import get_session
 from services.user_service import UserService, RoleService
-from models.user import UserUpdate, UserChangePassword
+from models.user import User, UserUpdate, UserChangePassword
 from exceptions import (
     NotFoundException,
     BadRequestException,
     UnauthorizedException,
     ConflictException
 )
+from security import get_current_user
 
 router = APIRouter()
 
@@ -33,7 +34,8 @@ def get_user_service(db: Session = Depends(get_session)):
 )
 async def get_user(
     user_id: int,
-    user_service: UserService = Depends(get_user_service)
+    user_service: UserService = Depends(get_user_service),
+    current_user: User = Depends(get_current_user)
 ) -> Dict:
     """
     Получение детальной информации о пользователе.
@@ -48,9 +50,15 @@ async def get_user(
         Dict с детальной информацией о пользователе
 
     Raises:
+        HTTPException 403: Если запрашивается другой пользователь
         HTTPException 404: Если пользователь с указанным ID не найден
         HTTPException 500: При внутренних ошибках сервера
     """
+    if user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: cannot view another user's profile"
+        )
     try:
         user = user_service.get_user_by_id(user_id)
         return {
@@ -91,7 +99,8 @@ async def get_user(
 async def update_user(
     user_id: int,
     update_data: UserUpdate,
-    user_service: UserService = Depends(get_user_service)
+    user_service: UserService = Depends(get_user_service),
+    current_user: User = Depends(get_current_user)
 ) -> Dict[str, str]:
     """
     Обновление информации профиля пользователя.
@@ -112,6 +121,11 @@ async def update_user(
         HTTPException 409: Если новый логин или email уже используется другим пользователем
         HTTPException 500: При внутренних ошибках сервера
     """
+    if user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: cannot update another user's profile"
+        )
     try:
         user_service.update_user(user_id, update_data)
         return {
@@ -155,7 +169,8 @@ async def update_user(
 async def change_password(
     user_id: int,
     password_data: UserChangePassword,
-    user_service: UserService = Depends(get_user_service)
+    user_service: UserService = Depends(get_user_service),
+    current_user: User = Depends(get_current_user)
 ) -> Dict[str, str]:
     """
     Смена пароля пользователя.
@@ -178,6 +193,11 @@ async def change_password(
         HTTPException 404: Если пользователь не найден
         HTTPException 500: При внутренних ошибках сервера
     """
+    if user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: cannot change another user's password"
+        )
     try:
         user_service.change_password(user_id, password_data)
         return {
@@ -219,7 +239,8 @@ async def change_password(
 )
 async def deactivate_user(
     user_id: int,
-    user_service: UserService = Depends(get_user_service)
+    user_service: UserService = Depends(get_user_service),
+    current_user: User = Depends(get_current_user)
 ) -> Dict[str, str]:
     """
     Деактивация учетной записи пользователя.
@@ -239,6 +260,11 @@ async def deactivate_user(
         HTTPException 404: Если пользователь не найден
         HTTPException 500: При внутренних ошибках сервера
     """
+    if user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: cannot deactivate another user"
+        )
     try:
         user_service.deactivate_user(user_id)
         return {
@@ -275,7 +301,8 @@ async def deactivate_user(
 )
 async def activate_user(
     user_id: int,
-    user_service: UserService = Depends(get_user_service)
+    user_service: UserService = Depends(get_user_service),
+    current_user: User = Depends(get_current_user)
 ) -> Dict[str, str]:
     """
     Активация учетной записи пользователя.
@@ -294,6 +321,11 @@ async def activate_user(
         HTTPException 404: Если пользователь не найден
         HTTPException 500: При внутренних ошибках сервера
     """
+    if user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: cannot activate another user"
+        )
     try:
         user_service.activate_user(user_id)
         return {
